@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,6 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
+import AddLeadDialog from '@/components/AddLeadDialog';
+import BroadcastDialog from '@/components/BroadcastDialog';
+import { useToast } from '@/hooks/use-toast';
 
 interface Lead {
   id: number;
@@ -35,18 +38,64 @@ const INITIAL_LEADS: Lead[] = [
 ];
 
 const Dashboard = () => {
+  const { toast } = useToast();
   const [leads, setLeads] = useState<Lead[]>(INITIAL_LEADS);
   const [activeTab, setActiveTab] = useState('pipeline');
+  const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
+  const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchLeads = async () => {
+    try {
+      const response = await fetch('https://functions.poehali.dev/7b2f94d7-2a46-4c0f-a844-5daf8fb469eb');
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const formattedLeads = data.map(lead => ({
+            id: lead.id,
+            name: lead.name,
+            username: lead.username || '',
+            stage: lead.stage,
+            value: parseFloat(lead.value) || 0,
+            lastContact: new Date(lead.last_contact || lead.created_at).toLocaleDateString('ru'),
+            notes: lead.notes || ''
+          }));
+          setLeads(formattedLeads);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch leads:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLeads();
+  }, []);
 
   const getLeadsByStage = (stage: Lead['stage']) => leads.filter(l => l.stage === stage);
   
   const totalValue = leads.reduce((sum, lead) => sum + lead.value, 0);
   const conversionRate = Math.round((getLeadsByStage('done').length / leads.length) * 100);
 
-  const moveLeadToStage = (leadId: number, newStage: Lead['stage']) => {
-    setLeads(leads.map(lead => 
-      lead.id === leadId ? { ...lead, stage: newStage } : lead
-    ));
+  const moveLeadToStage = async (leadId: number, newStage: Lead['stage']) => {
+    try {
+      const response = await fetch(`https://functions.poehali.dev/7b2f94d7-2a46-4c0f-a844-5daf8fb469eb/${leadId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: newStage })
+      });
+
+      if (response.ok) {
+        setLeads(leads.map(lead => 
+          lead.id === leadId ? { ...lead, stage: newStage } : lead
+        ));
+        toast({ title: 'Успешно!', description: 'Лид перемещен' });
+      }
+    } catch (error) {
+      toast({ title: 'Ошибка', description: 'Не удалось переместить лида', variant: 'destructive' });
+    }
   };
 
   return (
@@ -60,7 +109,7 @@ const Dashboard = () => {
               </h1>
               <p className="text-slate-400">Управление продажами в Telegram</p>
             </div>
-            <Button className="bg-blue-600 hover:bg-blue-700">
+            <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setIsAddLeadOpen(true)}>
               <Icon name="Plus" size={18} className="mr-2" />
               Добавить лид
             </Button>
@@ -219,28 +268,13 @@ const Dashboard = () => {
 
           <TabsContent value="broadcast" className="space-y-4">
             <Card className="p-6 bg-slate-800/50 border-slate-700">
-              <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span>💬</span> Создать рассылку
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm text-slate-400 mb-2 block">Получатели</label>
-                  <div className="flex gap-2 flex-wrap">
-                    <Badge className="bg-blue-600 hover:bg-blue-700 cursor-pointer">Все ({leads.length})</Badge>
-                    <Badge variant="outline" className="cursor-pointer">Новые ({getLeadsByStage('new').length})</Badge>
-                    <Badge variant="outline" className="cursor-pointer">В работе ({getLeadsByStage('contact').length})</Badge>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm text-slate-400 mb-2 block">Сообщение</label>
-                  <textarea 
-                    className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg text-white min-h-[120px]"
-                    placeholder="Привет! 👋 У нас для тебя специальное предложение..."
-                  />
-                </div>
-                <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                  <Icon name="Send" size={18} className="mr-2" />
-                  Отправить рассылку
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-white flex items-center gap-2">
+                  <span>💬</span> Рассылки
+                </h3>
+                <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setIsBroadcastOpen(true)}>
+                  <Icon name="Plus" size={16} className="mr-2" />
+                  Создать рассылку
                 </Button>
               </div>
             </Card>
@@ -382,6 +416,27 @@ const Dashboard = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        <AddLeadDialog 
+          open={isAddLeadOpen} 
+          onOpenChange={setIsAddLeadOpen}
+          onLeadAdded={fetchLeads}
+        />
+
+        <BroadcastDialog
+          open={isBroadcastOpen}
+          onOpenChange={setIsBroadcastOpen}
+          onBroadcastCreated={() => {
+            toast({ title: 'Рассылка создана!', description: 'Сообщения отправляются' });
+          }}
+          leadsCount={{
+            all: leads.length,
+            new: getLeadsByStage('new').length,
+            contact: getLeadsByStage('contact').length,
+            deal: getLeadsByStage('deal').length,
+            payment: getLeadsByStage('payment').length
+          }}
+        />
       </div>
     </div>
   );

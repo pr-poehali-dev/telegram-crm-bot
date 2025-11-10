@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "name": "Get all leads",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "type": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Create new lead",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "name": "Test Lead",
+        "username": "@testuser",
+        "stage": "new",
+        "value": 50000,
+        "notes": "Test note"
+      },
+      "expectedStatus": 201,
+      "expectedBody": {
+        "name": "Test Lead",
+        "stage": "new"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Get all broadcasts",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "type": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Create new broadcast",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "name": "Test Broadcast",
+        "message": "Hello everyone!",
+        "target_segment": "all"
+      },
+      "expectedStatus": 201,
+      "expectedBody": {
+        "name": "Test Broadcast",
+        "status": "draft"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
